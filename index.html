@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Chunk & ILT Script Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@3.12.0/dist/pptxgen.bundle.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --primary:#2563eb;--primary-dark:#1d4ed8;--primary-light:#dbeafe;
+  --accent:#10b981;--accent-dark:#059669;
+  --warn:#f59e0b;--danger:#ef4444;
+  --purple:#7c3aed;--purple-light:#f5f3ff;
+  --bg:#f1f5f9;--surface:#ffffff;--surface2:#f8fafc;
+  --text:#1e293b;--text2:#64748b;--text3:#94a3b8;
+  --border:#e2e8f0;
+  --shadow:0 1px 3px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06);
+  --shadow-lg:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);
+  --radius:10px;--radius-sm:6px;
+}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;padding-bottom:50px}
+h1,h2,h3,h4{line-height:1.3}
+button{cursor:pointer;font-family:inherit}
+.header{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;padding:16px 32px;display:flex;align-items:center;gap:16px;box-shadow:var(--shadow-lg);position:sticky;top:0;z-index:100}
+.header svg{width:32px;height:32px;flex-shrink:0}
+.header h1{font-size:1.35rem;font-weight:700}
+.header p{font-size:.8rem;opacity:.85}
+.upload-section{max-width:1400px;margin:24px auto;padding:0 24px;display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.upload-card{background:var(--surface);border:2px dashed var(--border);border-radius:var(--radius);padding:40px 24px;text-align:center;transition:all .2s;position:relative;overflow:hidden}
+.upload-card:hover,.upload-card.dragover{border-color:var(--primary);background:var(--primary-light)}
+.upload-card.loaded{border-color:var(--accent);border-style:solid;background:#ecfdf5}
+.upload-card input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-card .icon{font-size:2.5rem;margin-bottom:8px}
+.upload-card h3{font-size:1rem;margin-bottom:4px}
+.upload-card p{font-size:.8rem;color:var(--text2)}
+.upload-card .file-name{margin-top:8px;font-size:.85rem;font-weight:600;color:var(--accent-dark)}
+.format-badge{display:inline-block;margin-top:6px;padding:2px 10px;border-radius:20px;font-size:.7rem;font-weight:700;text-transform:uppercase}
+.format-srt{background:#fef3c7;color:#92400e}
+.format-vtt{background:#dbeafe;color:#1e40af}
+.main{max-width:1400px;margin:0 auto 40px;padding:0 24px}
+.content-grid{display:grid;grid-template-columns:420px 1fr;gap:24px;align-items:start}
+@media(max-width:1024px){.content-grid{grid-template-columns:1fr}.upload-section{grid-template-columns:1fr}}
+.video-panel{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;position:sticky;top:80px}
+.video-panel video{width:100%;display:block;background:#000}
+.video-info{padding:12px 16px;border-top:1px solid var(--border);font-size:.8rem;color:var(--text2)}
+.video-info span{font-weight:600;color:var(--text)}
+.tabs-container{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.tab-nav{display:flex;border-bottom:2px solid var(--border);background:var(--surface2)}
+.tab-btn{flex:1;padding:14px 20px;background:none;border:none;font-size:.9rem;font-weight:600;color:var(--text2);transition:all .2s;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tab-btn:hover{color:var(--text);background:var(--primary-light)}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+.tab-content{display:none;padding:20px}
+.tab-content.active{display:block}
+.toolbar{display:flex;align-items:center;gap:10px;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-wrap:wrap}
+.toolbar label{font-size:.8rem;color:var(--text2);display:flex;align-items:center;gap:6px}
+.toolbar select,.toolbar input[type=number]{padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.8rem;background:var(--surface)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:var(--radius-sm);font-size:.8rem;font-weight:600;transition:all .15s}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark)}
+.btn-accent{background:var(--accent);color:#fff}.btn-accent:hover{background:var(--accent-dark)}
+.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--text)}.btn-outline:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-light)}
+.btn-sm{padding:5px 10px;font-size:.75rem}
+.btn-purple{background:var(--purple);color:#fff}.btn-purple:hover{background:#6d28d9}
+.btn-orange{background:#ea580c;color:#fff}.btn-orange:hover{background:#c2410c}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.chunk-list{display:flex;flex-direction:column;gap:12px;max-height:70vh;overflow-y:auto;padding-right:4px}
+.chunk-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;transition:all .2s}
+.chunk-card:hover{border-color:var(--primary);box-shadow:var(--shadow)}
+.chunk-card.active{border-color:var(--primary);background:var(--primary-light)}
+.chunk-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.chunk-index{background:var(--primary);color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:20px}
+.chunk-time{font-size:.75rem;color:var(--text2);font-family:'Courier New',monospace}
+.chunk-text{font-size:.85rem;line-height:1.5;color:var(--text);margin-bottom:12px;padding:8px;background:var(--surface);border-radius:4px;border-left:3px solid var(--primary)}
+.chunk-actions{display:flex;gap:6px;flex-wrap:wrap}
+.chunk-progress{margin-top:8px}
+.progress-bar{width:100%;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.progress-bar-fill{height:100%;background:var(--primary);transition:width .3s;border-radius:2px}
+.outline-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px;overflow:hidden}
+.outline-header{background:linear-gradient(135deg,#4f46e5,var(--purple));color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none}
+.outline-header h3{font-size:1rem;display:flex;align-items:center;gap:8px}
+.outline-header .toggle-icon{transition:transform .2s;font-size:.8rem}
+.outline-header.collapsed .toggle-icon{transform:rotate(-90deg)}
+.outline-body{padding:16px;max-height:400px;overflow-y:auto}
+.outline-body.collapsed{display:none}
+.outline-step{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;border:1px solid transparent}
+.outline-step:hover{background:var(--primary-light);border-color:var(--primary)}
+.outline-step.active-outline{background:var(--primary-light);border-color:var(--primary)}
+.outline-num{width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.outline-info{flex:1;min-width:0}
+.outline-title{font-size:.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.outline-meta{font-size:.7rem;color:var(--text3);display:flex;gap:8px}
+.outline-duration{font-size:.7rem;color:var(--text2);flex-shrink:0;font-family:monospace}
+.step-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px;overflow:hidden;scroll-margin-top:90px}
+.step-card.highlight{box-shadow:0 0 0 3px rgba(37,99,235,.3)}
+.step-header{background:linear-gradient(135deg,var(--primary),#4f46e5);color:#fff;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.step-header h3{font-size:1.05rem;display:flex;align-items:center;gap:10px}
+.step-num-badge{background:rgba(255,255,255,.25);padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:700}
+.step-header .step-time{font-size:.75rem;opacity:.85;font-family:monospace}
+.step-body{padding:20px}
+.screenshots-section{margin-bottom:18px}
+.screenshots-label{font-size:.8rem;font-weight:700;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.screenshots-strip{display:flex;gap:10px;overflow-x:auto;padding:4px 0 8px;scroll-snap-type:x mandatory}
+.screenshot-item{flex-shrink:0;width:200px;scroll-snap-align:start}
+.screenshot-item img{width:100%;border-radius:var(--radius-sm);border:2px solid var(--border);cursor:pointer;transition:all .2s;display:block}
+.screenshot-item img:hover{border-color:var(--primary);transform:scale(1.03)}
+.screenshot-caption{font-size:.65rem;color:var(--text3);text-align:center;margin-top:4px;font-family:monospace}
+.screenshot-actions{display:flex;gap:4px;margin-top:4px}
+.screenshot-actions button{flex:1}
+.screenshots-strip::-webkit-scrollbar{height:6px}
+.screenshots-strip::-webkit-scrollbar-track{background:transparent}
+.screenshots-strip::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.ilt-fields-grid{display:grid;grid-template-columns:1fr;gap:16px}
+.field-card{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.field-card-header{padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.field-card-header .field-icon{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.7rem;flex-shrink:0}
+.field-say .field-card-header{background:var(--purple-light);color:var(--purple)}
+.field-say .field-icon{background:var(--purple)}
+.field-say{border-color:#e9d5ff}
+.field-do .field-card-header{background:#eff6ff;color:var(--primary)}
+.field-do .field-icon{background:var(--primary)}
+.field-do{border-color:#bfdbfe}
+.field-tip .field-card-header{background:#fffbeb;color:#b45309}
+.field-tip .field-icon{background:var(--warn)}
+.field-tip{border-color:#fde68a}
+.field-card-body{padding:12px 14px}
+.field-textarea{width:100%;min-height:80px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.85rem;font-family:inherit;resize:vertical;line-height:1.6;transition:border-color .2s}
+.field-textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.field-source{margin-top:8px;padding:8px 10px;background:var(--surface2);border-radius:4px;font-size:.75rem;color:var(--text3);border-left:2px solid var(--border);max-height:80px;overflow-y:auto;line-height:1.5}
+.field-source-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:4px}
+.step-title-input{background:transparent;border:none;border-bottom:1px dashed rgba(255,255,255,.4);color:#fff;font-size:1.05rem;font-weight:700;width:100%;outline:none;padding:2px 0}
+.step-title-input:focus{border-bottom-color:#fff}
+.step-title-input::placeholder{color:rgba(255,255,255,.5)}
+.export-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.export-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:24px;text-align:center;transition:all .2s}
+.export-card:hover{border-color:var(--primary);box-shadow:var(--shadow)}
+.export-card .icon{font-size:2.5rem;margin-bottom:12px}
+.export-card h3{font-size:1rem;margin-bottom:6px}
+.export-card p{font-size:.8rem;color:var(--text2);margin-bottom:16px}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--surface);border-radius:var(--radius);padding:24px;max-width:700px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:var(--shadow-lg)}
+.modal h2{margin-bottom:16px}
+.modal pre{background:#1e293b;color:#e2e8f0;padding:16px;border-radius:var(--radius-sm);font-size:.8rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+.modal-close{float:right;background:none;border:none;font-size:1.5rem;color:var(--text2)}
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;align-items:center;justify-content:center;cursor:zoom-out}
+.lightbox.show{display:flex}
+.lightbox img{max-width:90vw;max-height:90vh;border-radius:8px}
+.status-bar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:8px 24px;display:flex;align-items:center;gap:16px;font-size:.8rem;z-index:99}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.status-dot.idle{background:var(--text3)}
+.status-dot.working{background:var(--warn);animation:pulse 1s infinite}
+.status-dot.done{background:var(--accent)}
+.status-dot.error{background:var(--danger)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.status-text{flex:1}
+.global-progress{width:200px;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.global-progress-fill{height:100%;background:var(--primary);transition:width .3s}
+.hidden{display:none!important}
+.empty-state{text-align:center;padding:60px 20px;color:var(--text3)}
+.empty-state .icon{font-size:3rem;margin-bottom:12px}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:600}
+.badge-blue{background:var(--primary-light);color:var(--primary)}
+.badge-green{background:#dcfce7;color:#16a34a}
+.badge-purple{background:#f3e8ff;color:var(--purple)}
+.chunk-list::-webkit-scrollbar,.outline-body::-webkit-scrollbar{width:6px}
+.chunk-list::-webkit-scrollbar-track,.outline-body::-webkit-scrollbar-track{background:transparent}
+.chunk-list::-webkit-scrollbar-thumb,.outline-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.frame-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:10px}
+.frame-gallery img{width:100%;border-radius:4px;border:1px solid var(--border);cursor:pointer;transition:all .2s}
+.frame-gallery img:hover{transform:scale(1.05);box-shadow:var(--shadow)}
+.generating-spinner{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:40px;color:var(--text2);font-size:.95rem}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.gen-phase{font-size:.75rem;color:var(--text3);margin-top:4px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="3"/><polygon points="10,8 16,12 10,16"/></svg>
+  <div>
+    <h1>Video Chunk & ILT Script Generator</h1>
+    <p>Split videos by SRT/VTT • Frame analysis • ILT facilitator scripts • Export to PowerPoint</p>
+  </div>
+</div>
+
+<div class="upload-section">
+  <div class="upload-card" id="videoUploadCard">
+    <input type="file" id="videoInput" accept="video/*">
+    <div class="icon">🎬</div><h3>Select Video File</h3><p>MP4, WebM, MOV, AVI</p>
+    <div class="file-name hidden" id="videoFileName"></div>
+  </div>
+  <div class="upload-card" id="srtUploadCard">
+    <input type="file" id="srtInput" accept=".srt,.vtt,.txt">
+    <div class="icon">📝</div><h3>Select Subtitle File</h3><p>SRT or WebVTT (.vtt)</p>
+    <div class="file-name hidden" id="srtFileName"></div>
+  </div>
+</div>
+
+<div class="main hidden" id="mainContent">
+  <div class="content-grid">
+    <div class="video-panel">
+      <video id="videoPlayer" controls preload="auto"></video>
+      <div class="video-info">Duration: <span id="videoDuration">--</span> | Res: <span id="videoRes">--</span> | Chunks: <span id="chunkCount">--</span> | Format: <span id="subFormat">--</span></div>
+    </div>
+    <div class="tabs-container">
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="chunks">📦 Chunks</button>
+        <button class="tab-btn" data-tab="ilt">📋 ILT Script</button>
+        <button class="tab-btn" data-tab="export">💾 Export</button>
+      </div>
+
+      <div class="tab-content active" id="tab-chunks">
+        <div class="toolbar">
+          <label>Frames FPS: <input type="number" id="frameFps" value="30" min="0.25" max="60" step="0.25" style="width:70px"></label>
+          <label>Format: <select id="frameFormat"><option value="image/png">PNG</option><option value="image/jpeg" selected>JPEG</option><option value="image/webp">WebP</option></select></label>
+          <div style="flex:1"></div>
+          <button class="btn btn-outline btn-sm" onclick="showFFmpegCommands()">⚡ FFmpeg</button>
+          <button class="btn btn-primary btn-sm" onclick="downloadAllChunks()">⬇ Download All</button>
+        </div>
+        <div class="chunk-list" id="chunkList"></div>
+      </div>
+
+      <div class="tab-content" id="tab-ilt">
+        <div class="toolbar" style="flex-wrap:wrap">
+          <label>Gap (s): <input type="number" id="gapThreshold" value="2" min="0.3" max="30" step="0.5" style="width:70px"></label>
+          <label>Min subs: <input type="number" id="minSubsPerStep" value="2" min="1" max="20" style="width:60px"></label>
+          <label>Screenshots: <input type="number" id="screenshotsPerStep" value="4" min="1" max="10" style="width:60px"></label>
+          <div style="flex:1"></div>
+          <button class="btn btn-purple btn-sm" onclick="analyzeAndGenerate()">🔍 Analyze & Generate</button>
+          <button class="btn btn-orange btn-sm" onclick="exportPPTX()">📊 PPTX</button>
+          <button class="btn btn-accent btn-sm" onclick="exportILT()">📄 HTML</button>
+          <button class="btn btn-outline btn-sm" onclick="exportILTJSON()">{ } JSON</button>
+          <button class="btn btn-outline btn-sm" onclick="exportSlideDeck()">🎞 Slides</button>
+        </div>
+        <div id="iltContent">
+          <div class="empty-state"><div class="icon">📋</div><p>Click <strong>"Analyze & Generate"</strong> to analyze the script, detect on-screen actions from frame comparison, extract screenshots, and build a complete facilitator guide.</p></div>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-export">
+        <div class="export-grid">
+          <div class="export-card"><div class="icon">📊</div><h3>PowerPoint (PPTX)</h3><p>Screenshots on slides, facilitator notes in speaker notes</p><button class="btn btn-orange" onclick="exportPPTX()">📊 PPTX</button></div>
+          <div class="export-card"><div class="icon">📦</div><h3>Video Chunks ZIP</h3><p>All segments as WebM</p><button class="btn btn-primary" onclick="downloadAllChunks()">⬇ ZIP</button></div>
+          <div class="export-card"><div class="icon">🖼️</div><h3>All Frames ZIP</h3><p>Frames at configured FPS</p><button class="btn btn-primary" onclick="downloadAllFrames()">⬇ ZIP</button></div>
+          <div class="export-card"><div class="icon">📋</div><h3>ILT HTML Doc</h3><p>Formatted script with screenshots</p><button class="btn btn-primary" onclick="exportILT()">📄 HTML</button></div>
+          <div class="export-card"><div class="icon">🎞️</div><h3>HTML Slide Deck</h3><p>Browser presentation</p><button class="btn btn-primary" onclick="exportSlideDeck()">🎞 HTML</button></div>
+          <div class="export-card"><div class="icon">⚡</div><h3>FFmpeg Commands</h3><p>Terminal splitting</p><button class="btn btn-primary" onclick="showFFmpegCommands()">📋 Show</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal"><div class="modal"><button class="modal-close" onclick="closeModal()">&times;</button><div id="modalBody"></div></div></div>
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('show')"><img id="lightboxImg" src="" alt=""></div>
+<div class="status-bar"><div class="status-dot idle" id="statusDot"></div><span class="status-text" id="statusText">Ready</span><div class="global-progress"><div class="global-progress-fill" id="globalProgress" style="width:0%"></div></div></div>
+<canvas id="hiddenCanvas" style="display:none"></canvas>
+
+<script>
+const state={videoFile:null,videoUrl:null,srtFile:null,subtitles:[],iltSteps:[],processing:false,detectedFormat:null};
+const vp=document.getElementById('videoPlayer'),hc=document.getElementById('hiddenCanvas'),ctx=hc.getContext('2d',{willReadFrequently:true});
+
+/* ===== UPLOADS ===== */
+document.getElementById('videoInput').addEventListener('change',function(e){const f=e.target.files[0];if(!f)return;state.videoFile=f;if(state.videoUrl)URL.revokeObjectURL(state.videoUrl);state.videoUrl=URL.createObjectURL(f);vp.src=state.videoUrl;document.getElementById('videoFileName').textContent='✅ '+f.name;document.getElementById('videoFileName').classList.remove('hidden');document.getElementById('videoUploadCard').classList.add('loaded');vp.addEventListener('loadedmetadata',()=>{document.getElementById('videoDuration').textContent=fmtTime(vp.duration);document.getElementById('videoRes').textContent=vp.videoWidth+'×'+vp.videoHeight;checkReady();},{once:true});});
+document.getElementById('srtInput').addEventListener('change',function(e){const f=e.target.files[0];if(!f)return;state.srtFile=f;const r=new FileReader();r.onload=ev=>{const raw=ev.target.result;state.detectedFormat=detectFmt(raw,f.name);state.subtitles=state.detectedFormat==='vtt'?parseVTT(raw):parseSRT(raw);document.getElementById('srtFileName').innerHTML='✅ '+f.name+' ('+state.subtitles.length+') <span class="format-badge format-'+state.detectedFormat+'">'+state.detectedFormat.toUpperCase()+'</span>';document.getElementById('srtFileName').classList.remove('hidden');document.getElementById('srtUploadCard').classList.add('loaded');checkReady();};r.readAsText(f);});
+function checkReady(){if(state.videoFile&&state.subtitles.length>0){document.getElementById('mainContent').classList.remove('hidden');document.getElementById('chunkCount').textContent=state.subtitles.length;document.getElementById('subFormat').textContent=(state.detectedFormat||'srt').toUpperCase();renderChunks();setStatus('idle',`Loaded ${state.subtitles.length} chunks`);}}
+
+/* ===== PARSERS ===== */
+function detectFmt(t,n){if(/^WEBVTT/i.test(t.trim()))return'vtt';const e=(n||'').split('.').pop().toLowerCase();if(e==='vtt')return'vtt';if(e==='srt')return'srt';if(/\d{2}:\d{2}:\d{2}\.\d{3}\s*-->/.test(t))return'vtt';return'srt';}
+function parseSRT(text){const subs=[];text=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');for(const block of text.trim().split(/\n\n+/)){const lines=block.trim().split('\n');if(lines.length<2)continue;let li=0,idx=subs.length+1;if(/^\d+$/.test(lines[0].trim())){idx=parseInt(lines[0]);li=1;}if(li>=lines.length)continue;const m=lines[li].match(/([\d:,\.]+)\s*-->\s*([\d:,\.]+)/);if(!m)continue;li++;const ss=m[1].replace(',','.'),es=m[2].replace(',','.');const txt=lines.slice(li).join(' ').replace(/<[^>]+>/g,'').trim();if(!txt)continue;subs.push({index:idx,startStr:ss,endStr:es,start:t2s(ss),end:t2s(es),text:txt});}return subs;}
+function parseVTT(text){const subs=[];text=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/^WEBVTT[^\n]*/,'').replace(/^(NOTE|STYLE|REGION)[\s\S]*?\n\n/gm,'');for(const block of text.trim().split(/\n\n+/)){const lines=block.trim().split('\n');if(lines.length<2)continue;let li=0;if(!lines[0].includes('-->'))li=1;if(li>=lines.length)continue;const m=lines[li].match(/((?:\d{2}:)?\d{2}:\d{2}\.\d{3})\s*-->\s*((?:\d{2}:)?\d{2}:\d{2}\.\d{3})/);if(!m)continue;li++;const ss=normVTT(m[1]),es=normVTT(m[2]);const txt=lines.slice(li).join(' ').replace(/<\/?[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' ').trim();if(!txt)continue;subs.push({index:subs.length+1,startStr:ss,endStr:es,start:t2s(ss),end:t2s(es),text:txt});}return subs;}
+function normVTT(t){return t.split(':').length===2?'00:'+t:t;}
+function t2s(t){const p=t.split(':');return parseInt(p[0])*3600+parseInt(p[1])*60+parseFloat(p[2]);}
+function fmtTime(s){if(isNaN(s))return'00:00:00.000';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=(s%60).toFixed(3);return`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${sec.padStart(6,'0')}`;}
+function fmtShort(s){if(isNaN(s))return'0:00';const m=Math.floor(s/60),sec=Math.floor(s%60);return`${m}:${String(sec).padStart(2,'0')}`;}
+function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
+function delay(ms){return new Promise(r=>setTimeout(r,ms));}
+
+/* ===== TABS ===== */
+document.querySelectorAll('.tab-btn').forEach(b=>{b.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById('tab-'+b.dataset.tab).classList.add('active');});});
+
+/* ===== CHUNKS ===== */
+function renderChunks(){const list=document.getElementById('chunkList');list.innerHTML='';state.subtitles.forEach((sub,i)=>{const c=document.createElement('div');c.className='chunk-card';c.id='chunk-'+i;c.innerHTML=`<div class="chunk-header"><span class="chunk-index">#${sub.index}</span><span class="chunk-time">${sub.startStr}→${sub.endStr} <span class="badge badge-blue">${(sub.end-sub.start).toFixed(1)}s</span></span></div><div class="chunk-text">${esc(sub.text)}</div><div class="chunk-actions"><button class="btn btn-outline btn-sm" onclick="previewChunk(${i})">▶</button><button class="btn btn-primary btn-sm" onclick="dlChunkVid(${i})" id="dlv-${i}">⬇ Video</button><button class="btn btn-accent btn-sm" onclick="dlChunkFrames(${i})" id="dlf-${i}">🖼 Frames</button><button class="btn btn-outline btn-sm" onclick="toggleGallery(${i})">👁 Gallery</button></div><div class="frame-gallery hidden" id="gallery-${i}"></div><div class="chunk-progress hidden" id="prog-${i}"><div class="progress-bar"><div class="progress-bar-fill" id="pf-${i}"></div></div></div>`;list.appendChild(c);});}
+function previewChunk(i){const s=state.subtitles[i];document.querySelectorAll('.chunk-card').forEach(c=>c.classList.remove('active'));document.getElementById('chunk-'+i).classList.add('active');vp.currentTime=s.start;vp.play();const fn=()=>{if(vp.currentTime>=s.end){vp.pause();vp.removeEventListener('timeupdate',fn);}};vp.addEventListener('timeupdate',fn);}
+
+/* ===== FRAME HELPERS ===== */
+async function seekTo(t){vp.currentTime=t;await new Promise(r=>{vp.onseeked=r;});await delay(60);}
+async function captureAt(t){hc.width=vp.videoWidth;hc.height=vp.videoHeight;await seekTo(t);ctx.drawImage(vp,0,0,hc.width,hc.height);return hc.toDataURL('image/jpeg',0.9);}
+async function extractFrames(st,et){const fps=parseFloat(document.getElementById('frameFps').value)||30;const fmt=document.getElementById('frameFormat').value;const q=fmt==='image/png'?undefined:0.92;hc.width=vp.videoWidth;hc.height=vp.videoHeight;const frames=[],iv=1/fps;for(let t=st;t<=et;t+=iv){await seekTo(t);ctx.drawImage(vp,0,0,hc.width,hc.height);frames.push({time:t,dataUrl:q!==undefined?hc.toDataURL(fmt,q):hc.toDataURL(fmt)});}return frames;}
+async function toggleGallery(i){const g=document.getElementById('gallery-'+i);if(!g.classList.contains('hidden')){g.classList.add('hidden');return;}const sub=state.subtitles[i];g.innerHTML='<p style="font-size:.8rem;color:var(--text2);padding:8px">Extracting at '+document.getElementById('frameFps').value+' fps…</p>';g.classList.remove('hidden');setStatus('working','Extracting…');try{const frames=await extractFrames(sub.start,sub.end);g.innerHTML='';frames.forEach((f,fi)=>{const img=document.createElement('img');img.src=f.dataUrl;img.title=fmtTime(f.time);img.onclick=()=>{const a=document.createElement('a');a.href=f.dataUrl;a.download=`chunk${sub.index}_frame${fi+1}.${document.getElementById('frameFormat').value.split('/')[1]}`;a.click();};g.appendChild(img);});setStatus('done',`${frames.length} frames extracted`);}catch(e){g.innerHTML='<p style="color:var(--danger)">Error</p>';setStatus('error',e.message);}}
+
+/* ===== RECORDING ===== */
+async function recordChunk(st,et,onP){return new Promise(async(resolve,reject)=>{try{hc.width=vp.videoWidth;hc.height=vp.videoHeight;vp.currentTime=st;vp.muted=true;await new Promise(r=>vp.onseeked=r);const cs=hc.captureStream(30);try{const vs=vp.captureStream?vp.captureStream():vp.mozCaptureStream?vp.mozCaptureStream():null;if(vs)vs.getAudioTracks().forEach(t=>cs.addTrack(t));}catch(e){}let mime='video/webm;codecs=vp8,opus';if(!MediaRecorder.isTypeSupported(mime))mime='video/webm';if(!MediaRecorder.isTypeSupported(mime))mime='';const rec=new MediaRecorder(cs,mime?{mimeType:mime}:{});const ch=[];rec.ondataavailable=e=>{if(e.data.size>0)ch.push(e.data);};rec.onstop=()=>{vp.muted=false;resolve(new Blob(ch,{type:'video/webm'}));};rec.onerror=e=>{vp.muted=false;reject(e);};rec.start(100);vp.play();const dur=et-st;const tick=()=>{if(vp.currentTime>=et||vp.paused||vp.ended){vp.pause();if(rec.state==='recording')rec.stop();return;}ctx.drawImage(vp,0,0,hc.width,hc.height);if(onP)onP(Math.min((vp.currentTime-st)/dur,1));requestAnimationFrame(tick);};tick();}catch(e){vp.muted=false;reject(e);}});}
+
+/* ===== DOWNLOADS ===== */
+async function dlChunkVid(i){if(state.processing)return;state.processing=true;const sub=state.subtitles[i],btn=document.getElementById('dlv-'+i);btn.disabled=true;btn.textContent='⏳';document.getElementById('prog-'+i).classList.remove('hidden');try{const blob=await recordChunk(sub.start,sub.end,p=>{document.getElementById('pf-'+i).style.width=(p*100)+'%';});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`chunk_${String(sub.index).padStart(4,'0')}.webm`;a.click();URL.revokeObjectURL(a.href);setStatus('done','Downloaded');}catch(e){setStatus('error',e.message);}finally{btn.disabled=false;btn.textContent='⬇ Video';document.getElementById('pf-'+i).style.width='0%';document.getElementById('prog-'+i).classList.add('hidden');state.processing=false;}}
+async function dlChunkFrames(i){if(state.processing)return;state.processing=true;const sub=state.subtitles[i],btn=document.getElementById('dlf-'+i);btn.disabled=true;btn.textContent='⏳';setStatus('working','Extracting at '+document.getElementById('frameFps').value+' fps…');try{const frames=await extractFrames(sub.start,sub.end);const ext=document.getElementById('frameFormat').value.split('/')[1];const zip=new JSZip(),folder=zip.folder(`chunk_${sub.index}_frames`);frames.forEach((f,fi)=>folder.file(`frame_${String(fi+1).padStart(5,'0')}.${ext}`,f.dataUrl.split(',')[1],{base64:true}));const c=await zip.generateAsync({type:'blob'});const a=document.createElement('a');a.href=URL.createObjectURL(c);a.download=`chunk_${sub.index}_frames_${document.getElementById('frameFps').value}fps.zip`;a.click();URL.revokeObjectURL(a.href);setStatus('done',`${frames.length} frames exported`);}catch(e){setStatus('error',e.message);}finally{btn.disabled=false;btn.textContent='🖼 Frames';state.processing=false;}}
+async function downloadAllChunks(){if(state.processing)return;if(!confirm(`Record ${state.subtitles.length} chunks?`))return;state.processing=true;const zip=new JSZip();for(let i=0;i<state.subtitles.length;i++){setStatus('working',`${i+1}/${state.subtitles.length}…`);document.getElementById('globalProgress').style.width=((i/state.subtitles.length)*100)+'%';try{const blob=await recordChunk(state.subtitles[i].start,state.subtitles[i].end);zip.file(`chunk_${String(state.subtitles[i].index).padStart(4,'0')}.webm`,await blob.arrayBuffer());}catch(e){}}const c=await zip.generateAsync({type:'blob'});const a=document.createElement('a');a.href=URL.createObjectURL(c);a.download='all_chunks.zip';a.click();URL.revokeObjectURL(a.href);setStatus('done','Done');state.processing=false;}
+async function downloadAllFrames(){if(state.processing)return;state.processing=true;const zip=new JSZip(),ext=document.getElementById('frameFormat').value.split('/')[1],fps=document.getElementById('frameFps').value;for(let i=0;i<state.subtitles.length;i++){setStatus('working',`Frames ${i+1}/${state.subtitles.length} @ ${fps}fps…`);document.getElementById('globalProgress').style.width=((i/state.subtitles.length)*100)+'%';const frames=await extractFrames(state.subtitles[i].start,state.subtitles[i].end);const folder=zip.folder(`chunk_${String(state.subtitles[i].index).padStart(4,'0')}`);frames.forEach((f,fi)=>folder.file(`frame_${String(fi+1).padStart(5,'0')}.${ext}`,f.dataUrl.split(',')[1],{base64:true}));}const c=await zip.generateAsync({type:'blob'});const a=document.createElement('a');a.href=URL.createObjectURL(c);a.download=`all_frames_${fps}fps.zip`;a.click();URL.revokeObjectURL(a.href);setStatus('done','Done');state.processing=false;}
+function showFFmpegCommands(){const fn=state.videoFile?state.videoFile.name:'input.mp4';let c=`mkdir -p chunks frames\n\n`;state.subtitles.forEach(s=>{const p=String(s.index).padStart(4,'0');c+=`ffmpeg -i "${fn}" -ss ${s.startStr} -to ${s.endStr} -c:v libx264 -c:a aac -avoid_negative_ts make_zero "chunks/chunk_${p}.mp4"\n`;});c+=`\n# Frames at 30fps\n`;state.subtitles.forEach(s=>{const p=String(s.index).padStart(4,'0');c+=`ffmpeg -i "${fn}" -ss ${s.startStr} -to ${s.endStr} -vf "fps=30" "frames/chunk_${p}_frame_%05d.png"\n`;});document.getElementById('modalBody').innerHTML=`<h2>⚡ FFmpeg</h2><button class="btn btn-primary btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('ffO').textContent).then(()=>this.textContent='✅')" style="margin-bottom:12px">📋 Copy</button><pre id="ffO">${esc(c)}</pre>`;document.getElementById('modal').classList.add('show');}
+
+/* =============================================================
+   VISUAL FRAME ANALYSIS — Detect on-screen actions
+   ============================================================= */
+async function analyzeVisualActions(startTime, endTime){
+  const w=vp.videoWidth, h=vp.videoHeight;
+  hc.width=w; hc.height=h;
+  const sampleInterval=0.5; // Analyze every 0.5s
+  const gridCols=6, gridRows=4;
+  const cellW=Math.floor(w/gridCols), cellH=Math.floor(h/gridRows);
+  const pixelThreshold=18;
+
+  let prevData=null;
+  const changeEvents=[];
+
+  for(let t=startTime; t<=endTime; t+=sampleInterval){
+    await seekTo(t);
+    ctx.drawImage(vp,0,0,w,h);
+    const currentData=ctx.getImageData(0,0,w,h);
+
+    if(prevData){
+      const hotCells=[];
+      for(let r=0;r<gridRows;r++){
+        for(let c=0;c<gridCols;c++){
+          let diff=0,count=0;
+          const sx=c*cellW, sy=r*cellH;
+          for(let y=sy;y<sy+cellH;y+=5){
+            for(let x=sx;x<sx+cellW;x+=5){
+              const idx=(y*w+x)*4;
+              diff+=Math.abs(currentData.data[idx]-prevData.data[idx])
+                   +Math.abs(currentData.data[idx+1]-prevData.data[idx+1])
+                   +Math.abs(currentData.data[idx+2]-prevData.data[idx+2]);
+              count++;
+            }
+          }
+          const avg=diff/count/3;
+          if(avg>pixelThreshold) hotCells.push({row:r,col:c,diff:avg});
+        }
+      }
+      if(hotCells.length>0){
+        const regions=new Set();
+        for(const cell of hotCells){
+          if(cell.row===0){regions.add(cell.col<=1?'top-left':cell.col>=gridCols-2?'top-right':'top-center');}
+          else if(cell.row>=gridRows-1){regions.add('bottom');}
+          else{regions.add(cell.col===0?'left-panel':cell.col>=gridCols-1?'right-panel':'center');}
+        }
+        changeEvents.push({time:t,cells:hotCells,total:hotCells.length,regions:[...regions],maxDiff:Math.max(...hotCells.map(c=>c.diff))});
+      }
+    }
+    prevData=currentData;
+  }
+
+  // Interpret changes into action descriptions
+  const actions=[];
+  for(const ev of changeEvents){
+    const{regions,total,maxDiff}=ev;
+    if(total>=gridCols*gridRows*0.7){
+      actions.push({time:ev.time,desc:'Screen transitions to a new view or page',type:'navigation'});
+    }else if(total>gridCols*2){
+      if(regions.includes('center'))actions.push({time:ev.time,desc:'A dialog, popup, or overlay appears on screen',type:'dialog'});
+      else actions.push({time:ev.time,desc:'A large section of the interface refreshes or updates',type:'refresh'});
+    }else if(total>3){
+      if(regions.includes('left-panel'))actions.push({time:ev.time,desc:'Navigation panel or sidebar selection changes',type:'nav-click'});
+      else if(regions.includes('center'))actions.push({time:ev.time,desc:'Content in the main area changes — element selected or expanded',type:'content-change'});
+      else actions.push({time:ev.time,desc:'Multiple UI elements update simultaneously',type:'multi-change'});
+    }else{
+      if(regions.includes('top-left')||regions.includes('top-center')||regions.includes('top-right')){
+        actions.push({time:ev.time,desc:'Toolbar, ribbon, or menu bar interaction detected',type:'menu'});
+      }else if(regions.includes('left-panel')){
+        actions.push({time:ev.time,desc:'A navigation or tree-view item is clicked in the side panel',type:'nav-click'});
+      }else if(regions.includes('center')){
+        if(maxDiff>40)actions.push({time:ev.time,desc:'A button, link, or field is clicked in the main area',type:'click'});
+        else actions.push({time:ev.time,desc:'Text entry or minor visual change in the main content area',type:'text-entry'});
+      }else if(regions.includes('right-panel')){
+        actions.push({time:ev.time,desc:'Properties or details panel updates on the right side',type:'properties'});
+      }else if(regions.includes('bottom')){
+        actions.push({time:ev.time,desc:'Status bar or footer area updates',type:'status'});
+      }
+    }
+  }
+
+  // Deduplicate close-in-time same-type
+  const deduped=[];
+  for(const a of actions){
+    const last=deduped[deduped.length-1];
+    if(!last||last.type!==a.type||a.time-last.time>1.2) deduped.push(a);
+  }
+  return deduped;
+}
+
+/* =============================================================
+   ILT — ANALYZE & GENERATE
+   ============================================================= */
+async function analyzeAndGenerate(){
+  if(state.processing)return;
+  if(!state.subtitles.length){alert('Upload subtitles first.');return;}
+  state.processing=true;
+
+  const container=document.getElementById('iltContent');
+  container.innerHTML='<div class="generating-spinner"><div class="spinner"></div>Analyzing script & frames…<div class="gen-phase" id="genPhase">Detecting step boundaries…</div></div>';
+  setStatus('working','Analyzing…');
+  await delay(50);
+
+  const gapT=parseFloat(document.getElementById('gapThreshold').value)||2;
+  const minS=parseInt(document.getElementById('minSubsPerStep').value)||2;
+  const ssPS=parseInt(document.getElementById('screenshotsPerStep').value)||4;
+
+  // Score boundaries
+  const scored=[];
+  for(let i=1;i<state.subtitles.length;i++){
+    const prev=state.subtitles[i-1],curr=state.subtitles[i];let score=0;
+    const gap=curr.start-prev.end;
+    if(gap>=gapT)score+=40;else if(gap>=gapT*0.5)score+=20;else if(gap>=0.5)score+=5;
+    const cl=curr.text.toLowerCase();
+    if(/^(now|next|then|after that|once|finally|lastly|let's|let us|moving on|the next|step \d)/i.test(cl))score+=35;
+    if(/^(first|second|third|fourth|fifth|to begin|to start|starting|beginning)/i.test(cl))score+=30;
+    if(/^(so |okay |ok |alright |right |great |good |perfect |notice |here |and now)/i.test(cl))score+=15;
+    const pw=new Set(prev.text.toLowerCase().replace(/[^\w\s]/g,'').split(/\s+/));
+    const cw=new Set(cl.replace(/[^\w\s]/g,'').split(/\s+/));
+    let ov=0;cw.forEach(w=>{if(pw.has(w))ov++;});
+    if(ov/Math.max(cw.size,1)<0.15)score+=20;
+    if(/[.!?]$/.test(prev.text.trim()))score+=5;
+    scored.push({index:i,score});
+  }
+  scored.sort((a,b)=>b.score-a.score);
+  const bSet=new Set();
+  for(const s of scored){if(s.score<15)break;bSet.add(s.index);}
+  let bounds=[0,...[...bSet].sort((a,b)=>a-b)];
+  let groups=[];
+  for(let b=0;b<bounds.length;b++){groups.push(state.subtitles.slice(bounds[b],b+1<bounds.length?bounds[b+1]:state.subtitles.length));}
+  const merged=[];let buf=[];
+  for(const g of groups){buf=buf.concat(g);if(buf.length>=minS){merged.push([...buf]);buf=[];}}
+  if(buf.length){if(merged.length)merged[merged.length-1]=merged[merged.length-1].concat(buf);else merged.push(buf);}
+
+  // Build steps with visual analysis
+  state.iltSteps=[];
+  const total=merged.length;
+  for(let i=0;i<total;i++){
+    const group=merged[i];
+    const fullText=group.map(s=>s.text).join(' ');
+    const st=group[0].start,et=group[group.length-1].end,dur=et-st;
+
+    // Phase: screenshots
+    updatePhase(`Step ${i+1}/${total}: Capturing screenshots…`);
+    document.getElementById('globalProgress').style.width=((i/total)*100)+'%';
+    const screenshots=[];
+    const numSS=Math.min(ssPS,Math.max(2,Math.ceil(dur/2)));
+    for(let si=0;si<numSS;si++){
+      const t=st+(dur*si/(numSS-1||1));
+      try{screenshots.push({time:t,dataUrl:await captureAt(Math.min(t,et-0.1)),timeStr:fmtTime(t)});}catch(e){}
+    }
+
+    // Phase: visual analysis
+    updatePhase(`Step ${i+1}/${total}: Analyzing frame changes…`);
+    let visualActions=[];
+    try{visualActions=await analyzeVisualActions(st,et);}catch(e){console.warn('Visual analysis failed for step',i,e);}
+
+    const stepTitle=buildStepTitle(fullText,visualActions,i+1);
+
+    state.iltSteps.push({
+      index:i+1,
+      title:stepTitle,
+      startTime:st,endTime:et,
+      startStr:group[0].startStr,endStr:group[group.length-1].endStr,
+      subtitles:group,originalText:fullText,
+      toSay:buildFacilitatorScript(group,fullText,stepTitle,i,total),
+      toDo:buildToDo(fullText,visualActions),
+      tips:buildTips(fullText),
+      screenshots,
+      visualActions
+    });
+  }
+  document.getElementById('globalProgress').style.width='100%';
+  renderILT();
+  setStatus('done',`Generated ${state.iltSteps.length} steps with visual analysis`);
+  state.processing=false;
+}
+
+function updatePhase(msg){const el=document.getElementById('genPhase');if(el)el.textContent=msg;setStatus('working',msg);}
+
+/* ===== STEP TITLE — Concise, action-oriented ===== */
+function buildStepTitle(fullText,visualActions,idx){
+  const lower=fullText.toLowerCase();
+
+  // Extract key nouns / proper nouns from text
+  const properNouns=(fullText.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*/g)||[]).filter(n=>!['The','This','That','Then','Now','Next','Here','Once','After','Before','First','Great','Click','Select'].includes(n));
+
+  // Gerund-based title patterns (short, 2-5 words)
+  const titlePats=[
+    {p:/\b(accessing)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(opening)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(navigating)\s+(?:to\s+)?(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(configuring)\s+(the\s+)?(\w+(?:\s+\w+){0,2})/i},
+    {p:/\b(setting\s+up)\s+(the\s+)?(\w+(?:\s+\w+){0,2})/i},
+    {p:/\b(creating)\s+(a\s+|the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(adding)\s+(a\s+|the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(entering)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(selecting)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(reviewing)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(saving)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(updating)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(verifying)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(submitting)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(deleting)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+    {p:/\b(editing)\s+(the\s+)?(\w+(?:\s+\w+)?)/i},
+  ];
+  for(const tp of titlePats){const m=fullText.match(tp.p);if(m){let t=m[0].trim();t=t.charAt(0).toUpperCase()+t.slice(1);if(t.length>40)t=t.substring(0,37)+'…';return t;}}
+
+  // Imperative verb → convert to gerund title
+  const verbMap={click:'Clicking',open:'Opening',navigate:'Navigating to',go:'Going to',select:'Selecting',enter:'Entering',type:'Typing',save:'Saving',submit:'Submitting',configure:'Configuring',set:'Setting',check:'Checking',verify:'Verifying',review:'Reviewing',create:'Creating',add:'Adding',delete:'Deleting',remove:'Removing',update:'Updating',drag:'Dragging',scroll:'Scrolling',expand:'Expanding',collapse:'Collapsing',enable:'Enabling',disable:'Disabling',launch:'Launching',close:'Closing',apply:'Applying',upload:'Uploading',download:'Downloading',copy:'Copying',paste:'Pasting'};
+
+  for(const[verb,gerund]of Object.entries(verbMap)){
+    const re=new RegExp(`\\b${verb}\\s+(?:on\\s+|to\\s+)?(?:the\\s+|a\\s+)?["']?([\\w][\\w\\s]{2,25})["']?`,'i');
+    const m=fullText.match(re);
+    if(m){
+      let obj=m[1].trim().replace(/\s+(and|or|then|to|in|on|at|the)$/i,'');
+      obj=obj.split(/\s+/).slice(0,4).join(' ');
+      let title=gerund+' '+obj.charAt(0).toUpperCase()+obj.slice(1);
+      if(title.length>40)title=title.substring(0,37)+'…';
+      return title;
+    }
+  }
+
+  // Use proper nouns if found
+  if(properNouns.length){
+    const nn=properNouns[0];
+    // Determine action context
+    if(/click|select|choose/i.test(lower))return 'Selecting '+nn;
+    if(/open|launch|navigate/i.test(lower))return 'Accessing '+nn;
+    if(/enter|type|fill|input/i.test(lower))return 'Entering '+nn+' Details';
+    if(/save|submit|apply/i.test(lower))return 'Saving '+nn;
+    if(/review|verify|check/i.test(lower))return 'Reviewing '+nn;
+    return nn+' Configuration';
+  }
+
+  // Visual action-based title
+  if(visualActions.length){
+    const types=visualActions.map(a=>a.type);
+    if(types.includes('navigation'))return 'Navigating to New View';
+    if(types.includes('dialog'))return 'Working with Dialog';
+    if(types.includes('menu'))return 'Using Menu Options';
+    if(types.includes('text-entry'))return 'Entering Information';
+    if(types.includes('nav-click'))return 'Panel Navigation';
+  }
+
+  // Fallback: first 4 meaningful words
+  const words=fullText.replace(/^(so|okay|ok|now|then|and|the|a|an|this|that|here|let's|let us|alright|right|great|good|perfect)\s+/gi,'').split(/\s+/).filter(w=>w.length>2).slice(0,4).join(' ');
+  if(words.length>3){let t=words.charAt(0).toUpperCase()+words.slice(1);if(t.length>40)t=t.substring(0,37)+'…';return t;}
+  return 'Step '+idx;
+}
+
+/* ===== FACILITATOR "TO SAY" — Natural flow ===== */
+function buildFacilitatorScript(group,fullText,stepTitle,stepIdx,totalSteps){
+  const lines=[];
+
+  // Opening
+  if(stepIdx===0){
+    lines.push(`Welcome, everyone. We're going to walk through this process step by step so you can confidently perform it on your own afterward.\n`);
+    lines.push(`Our first step is about ${stepTitle.toLowerCase()}. Let me show you how this works.`);
+  } else if(stepIdx===totalSteps-1){
+    lines.push(`Alright, we've reached our final step — ${stepTitle.toLowerCase()}. We're almost done, so let's finish strong.`);
+  } else {
+    const transitions=[
+      `Great, now let's move on. This next part covers ${stepTitle.toLowerCase()}.`,
+      `Okay, building on what we just did, we now need to focus on ${stepTitle.toLowerCase()}.`,
+      `Perfect. The next thing I want to show you involves ${stepTitle.toLowerCase()}.`,
+      `Now that we've completed the previous step, let's look at ${stepTitle.toLowerCase()}.`,
+      `Good progress so far. Let's continue with ${stepTitle.toLowerCase()}.`
+    ];
+    lines.push(transitions[stepIdx%transitions.length]);
+  }
+  lines.push('');
+
+  // Context based on content
+  const lower=fullText.toLowerCase();
+  const hasUI=/click|button|menu|tab|dropdown|checkbox|option|dialog|icon/i.test(lower);
+  const hasNav=/navigate|go to|open|launch|browse|url|address/i.test(lower);
+  const hasData=/type|enter|input|fill|write|specify|provide|value|name|email|password/i.test(lower);
+  const hasVerify=/verify|check|confirm|ensure|validate|review|notice|appear|display/i.test(lower);
+  const hasSave=/save|submit|apply|finish|complete|done|update|confirm/i.test(lower);
+
+  if(hasNav) lines.push(`I'm going to guide you to the right place in the application. Please follow along on your screen so you don't miss anything.\n`);
+  else if(hasData) lines.push(`In this part, we'll be entering some information. I'll walk you through each field, so take your time and make sure you're putting in the right values.\n`);
+  else if(hasVerify) lines.push(`This is where we pause to review our work. Take a moment to compare what's on your screen with what you see on mine.\n`);
+  else if(hasSave) lines.push(`We're at an important save point here. Make sure you complete this step — if you skip it, you'll lose everything you've done so far.\n`);
+  else if(hasUI) lines.push(`I'm going to walk you through the interface here. Watch where I click and follow along on your own screens.\n`);
+  else lines.push(`Let me walk you through what we need to do here. Pay close attention because this is a key part of the process.\n`);
+
+  // Narration — sentence by sentence with natural facilitator phrasing
+  const allSentences=[];
+  group.forEach(sub=>{
+    sub.text.split(/(?<=[.!?])\s+/).forEach(s=>{
+      s=s.trim();
+      if(s.length<4)return;
+      if(!/[.!?]$/.test(s))s+='.';
+      s=s.charAt(0).toUpperCase()+s.slice(1);
+      if(!allSentences.some(x=>x.toLowerCase()===s.toLowerCase()))allSentences.push(s);
+    });
+  });
+
+  const actionPrefixes=['Go ahead and ','Now ','At this point, ','The next thing to do is ','What we need to do here is '];
+  const lookPrefixes=['As you can see, ','You\'ll notice that ','If you look at the screen, ','Take a look — ','Notice how '];
+  const engagements=['Does everyone see that?','Is everyone with me so far?','Let me know if you need a moment to catch up.','Raise your hand if you have a question.','Take a second to make sure your screen matches mine.'];
+
+  allSentences.forEach((sentence,si)=>{
+    const sLower=sentence.toLowerCase();
+    let line='';
+
+    if(/^(click|tap|press|select|choose|open|go|navigate|scroll|drag|type|enter|save|submit|expand|collapse|check|toggle)/i.test(sentence)){
+      const prefix=actionPrefixes[si%actionPrefixes.length];
+      line=prefix+sentence.charAt(0).toLowerCase()+sentence.slice(1);
+    } else if(/^(you will|you should|you can|you'll|notice|see|look|observe|the screen|it will|it should|a new|the page)/i.test(sentence)){
+      const prefix=lookPrefixes[si%lookPrefixes.length];
+      line=prefix+sentence.charAt(0).toLowerCase()+sentence.slice(1);
+    } else {
+      line=sentence;
+    }
+    lines.push(line);
+
+    // Natural engagement prompts every few sentences
+    if((si+1)%4===0&&si<allSentences.length-1){
+      lines.push('');
+      lines.push(engagements[si%engagements.length]);
+      lines.push('');
+    }
+  });
+
+  lines.push('');
+
+  // Closing
+  if(stepIdx===totalSteps-1){
+    lines.push(`And that brings us to the end of this walkthrough. Let's take a moment to recap the key points we covered today.\n`);
+    lines.push(`Does anyone have any final questions before we wrap up?`);
+  } else {
+    const closings=[
+      `Great, that wraps up this step. Everyone good? Let's keep going.`,
+      `Perfect. Before we move on — any questions about what we just covered?`,
+      `Good work, everyone. Make sure your screen matches mine, and then we'll continue.`,
+      `Excellent. The next step builds directly on what we just did, so let's keep the momentum going.`
+    ];
+    lines.push(closings[stepIdx%closings.length]);
+  }
+
+  return lines.join('\n');
+}
+
+/* ===== TO DO — Expanded bullets with visual actions ===== */
+function buildToDo(text, visualActions){
+  const bullets=[];
+
+  // 1. Extract actions from subtitle text
+  const textActions=[];
+  const pats=[
+    {p:/\b(click|tap|press)\s+(on\s+)?(the\s+)?["']?([^"'.!?,]{3,50})["']?/gi,fmt:m=>'Click on '+cleanObj(m)},
+    {p:/\b(right[- ]click)\s+(on\s+)?(the\s+)?["']?([^"'.!?,]{3,40})["']?/gi,fmt:m=>'Right-click on '+cleanObj(m)},
+    {p:/\b(double[- ]click)\s+(on\s+)?(the\s+)?["']?([^"'.!?,]{3,40})["']?/gi,fmt:m=>'Double-click on '+cleanObj(m)},
+    {p:/\b(select|choose|pick)\s+(the\s+)?["']?([^"'.!?,]{3,50})["']?/gi,fmt:m=>'Select '+cleanObj(m)},
+    {p:/\b(open|launch|start)\s+(the\s+)?["']?([^"'.!?,]{3,50})["']?/gi,fmt:m=>'Open '+cleanObj(m)},
+    {p:/\b(close)\s+(the\s+)?["']?([^"'.!?,]{3,40})["']?/gi,fmt:m=>'Close '+cleanObj(m)},
+    {p:/\b(type|enter|input|write)\s+["']([^"']{2,40})["']/gi,fmt:m=>'Type "'+m.match(/["']([^"']{2,40})["']/)?.[1]+'"'},
+    {p:/\b(type|enter|input)\s+(in\s+|into\s+)?(the\s+|your\s+)?["']?([^"'.!?,]{3,50})["']?/gi,fmt:m=>'Enter the value in '+cleanObj(m)},
+    {p:/\b(navigate|go)\s+(to\s+)?["']?([^"'.!?,]{3,50})["']?/gi,fmt:m=>'Navigate to '+cleanObj(m)},
+    {p:/\b(scroll)\s+(down|up|to)\s+["']?([^"'.!?,]{3,30})["']?/gi,fmt:m=>'Scroll '+cleanObj(m)},
+    {p:/\b(drag)\s+(the\s+)?["']?([^"'.!?,]{3,30})["']?/gi,fmt:m=>'Drag '+cleanObj(m)},
+    {p:/\b(expand|collapse|toggle)\s+(the\s+)?["']?([^"'.!?,]{3,40})["']?/gi,fmt:m=>'Expand/Toggle '+cleanObj(m)},
+    {p:/\b(enable|disable|turn on|turn off)\s+(the\s+)?["']?([^"'.!?,]{3,40})["']?/gi,fmt:m=>{let a=m[0].trim();return a.charAt(0).toUpperCase()+a.slice(1);}},
+    {p:/\b(check|uncheck|tick)\s+(the\s+)?["']?([^"'.!?,]{3,40})["']?/gi,fmt:m=>'Check/Uncheck '+cleanObj(m)},
+    {p:/\b(save|submit|apply|confirm|accept)\s*["']?([^"'.!?,]{0,40})["']?/gi,fmt:m=>{let a=m[0].trim();return a.charAt(0).toUpperCase()+a.slice(1);}},
+    {p:/\b(copy|paste|cut)\s+(the\s+)?["']?([^"'.!?,]{3,40})["']?/gi,fmt:m=>{let a=m[0].trim();return a.charAt(0).toUpperCase()+a.slice(1);}},
+    {p:/\b(delete|remove)\s+(the\s+)?["']?([^"'.!?,]{3,40})["']?/gi,fmt:m=>'Delete/Remove '+cleanObj(m)},
+    {p:/\b(verify|check|confirm|ensure|validate|review)\s+(that\s+|the\s+)?["']?([^"'.!?,]{3,50})["']?/gi,fmt:m=>'Verify '+cleanObj(m)},
+    {p:/\b(wait|pause)\s+(for\s+|until\s+)?["']?([^"'.!?,]{3,40})["']?/gi,fmt:m=>'Wait '+cleanObj(m)},
+  ];
+
+  for(const{p,fmt}of pats){
+    let m;
+    while((m=p.exec(text))!==null){
+      try{
+        let action=fmt(m);
+        action=action.replace(/\s+/g,' ').trim();
+        if(action.length>8&&action.length<100&&!textActions.some(a=>a.toLowerCase()===action.toLowerCase())){
+          textActions.push(action);
+        }
+      }catch(e){}
+    }
+  }
+
+  // 2. Add visual actions from frame analysis
+  const visualBullets=[];
+  if(visualActions&&visualActions.length){
+    for(const va of visualActions){
+      const desc=va.desc;
+      // Only add if not redundant with text actions
+      const isDuplicate=textActions.some(ta=>{
+        const tl=ta.toLowerCase(),dl=desc.toLowerCase();
+        return(tl.includes('click')&&dl.includes('click'))||(tl.includes('navigate')&&dl.includes('navigat'))||(tl.includes('menu')&&dl.includes('menu'))||(tl.includes('dialog')&&dl.includes('dialog'));
+      });
+      if(!isDuplicate){
+        visualBullets.push(`[Screen: ${fmtShort(va.time)}] ${desc}`);
+      }
+    }
+  }
+
+  // 3. Combine and format
+  // Text actions first (more specific), then visual
+  textActions.forEach(a=>bullets.push('• '+a));
+  if(visualBullets.length&&bullets.length>0)bullets.push('');
+  if(visualBullets.length>0){
+    bullets.push('On-screen activity detected:');
+    visualBullets.slice(0,8).forEach(v=>bullets.push('  ◦ '+v));
+  }
+
+  // Fallback
+  if(!bullets.length){
+    const sentences=text.split(/[.!?]+/).filter(s=>s.trim().length>10).slice(0,4);
+    sentences.forEach(s=>{s=s.trim();bullets.push('• '+s.charAt(0).toUpperCase()+s.slice(1));});
+    if(!bullets.length)bullets.push('• Follow the on-screen demonstration for this step.');
+  }
+
+  return bullets.join('\n');
+}
+
+function cleanObj(m){
+  let t=m[0].replace(/^[\w-]+\s+(on\s+|to\s+|in\s+|into\s+)?(the\s+|a\s+|your\s+|an\s+)?/i,'').replace(/["']/g,'').trim();
+  t=t.split(/\s+/).slice(0,6).join(' ');
+  t=t.replace(/\s+(and|or|then|to|in|on|at)$/i,'');
+  return t.charAt(0).toUpperCase()+t.slice(1);
+}
+
+/* ===== TIPS ===== */
+function buildTips(text){
+  const tips=[];
+  const pats=[
+    {p:/\b(make sure|ensure|be sure|remember|don'?t forget)[^.!?]{5,120}/gi,i:'💡'},
+    {p:/\b(note|notice|important|caution|warning|careful)[^.!?]{5,120}/gi,i:'⚠️'},
+    {p:/\b(tip|hint|trick|shortcut|alternatively|optionally)[^.!?]{5,120}/gi,i:'💡'},
+    {p:/\b(if you|in case|when you|should you)[^.!?]{5,100}/gi,i:'📌'},
+    {p:/\b(best practice|recommended|avoid|never|always)[^.!?]{5,100}/gi,i:'✅'},
+  ];
+  for(const{p,i}of pats){let m;while((m=p.exec(text))!==null){let t=m[0].trim();t=t.charAt(0).toUpperCase()+t.slice(1);if(t.length>10&&t.length<150&&!tips.some(x=>x.includes(t.substring(0,30))))tips.push(`${i} ${t}`);if(tips.length>=4)break;}}
+  if(!tips.length){
+    tips.push('💡 Walk learners through this step on their own screens.');
+    if(/click|button|menu|select/i.test(text))tips.push('📌 Point out the exact UI element location before clicking.');
+    if(/type|enter|input|field/i.test(text))tips.push('📌 Verify learners enter the correct values before proceeding.');
+    if(/save|submit|apply/i.test(text))tips.push('⚠️ Remind learners to save — unsaved changes will be lost.');
+  }
+  return tips.join('\n');
+}
+
+/* ===== RENDER ILT ===== */
+function renderILT(){
+  const c=document.getElementById('iltContent');c.innerHTML='';
+  const outline=document.createElement('div');outline.className='outline-panel';
+  outline.innerHTML=`<div class="outline-header" onclick="this.classList.toggle('collapsed');this.nextElementSibling.classList.toggle('collapsed')"><h3>📑 Outline <span class="badge badge-purple">${state.iltSteps.length} steps</span></h3><span class="toggle-icon">▼</span></div><div class="outline-body">${state.iltSteps.map((s,i)=>`<div class="outline-step" onclick="scrollToStep(${i})" id="ol-${i}"><div class="outline-num">${s.index}</div><div class="outline-info"><div class="outline-title">${esc(s.title)}</div><div class="outline-meta"><span>${s.subtitles.length} subs</span><span>${s.screenshots.length} ss</span>${s.visualActions?.length?`<span>${s.visualActions.length} actions detected</span>`:''}</div></div><div class="outline-duration">${fmtShort(s.startTime)}–${fmtShort(s.endTime)}<br><span class="badge badge-green">${(s.endTime-s.startTime).toFixed(1)}s</span></div></div>`).join('')}</div>`;
+  c.appendChild(outline);
+
+  state.iltSteps.forEach((step,i)=>{
+    const card=document.createElement('div');card.className='step-card';card.id='sc-'+i;
+    let ssHTML='';
+    if(step.screenshots.length){ssHTML=`<div class="screenshots-section"><div class="screenshots-label">📸 Screenshots <span class="badge badge-blue">${step.screenshots.length}</span></div><div class="screenshots-strip">${step.screenshots.map((ss,si)=>`<div class="screenshot-item"><img src="${ss.dataUrl}" alt="SS" onclick="openLB(this.src)"><div class="screenshot-caption">${ss.timeStr}</div><div class="screenshot-actions"><button class="btn btn-outline btn-sm" onclick="dlSS(${i},${si})">⬇</button><button class="btn btn-outline btn-sm" onclick="reSS(${i},${si})">🔄</button></div></div>`).join('')}</div></div>`;}
+    card.innerHTML=`<div class="step-header"><h3><span class="step-num-badge">Step ${step.index}</span><input class="step-title-input" value="${esc(step.title)}" data-step="${i}" data-field="title"></h3><span class="step-time">${step.startStr}→${step.endStr} <span class="badge badge-green">${(step.endTime-step.startTime).toFixed(1)}s</span> <span class="badge badge-blue">${step.subtitles.length} subs</span></span></div>
+    <div class="step-body">${ssHTML}<div class="ilt-fields-grid">
+      <div class="field-card field-say"><div class="field-card-header"><span class="field-icon">🗣</span> TO SAY — Facilitator Script</div><div class="field-card-body"><textarea class="field-textarea" rows="12" data-step="${i}" data-field="toSay">${esc(step.toSay)}</textarea><div class="field-source"><div class="field-source-label">Original Narration</div>${esc(step.originalText)}</div></div></div>
+      <div class="field-card field-do"><div class="field-card-header"><span class="field-icon">👆</span> TO DO — On-Screen Actions</div><div class="field-card-body"><textarea class="field-textarea" rows="6" data-step="${i}" data-field="toDo">${esc(step.toDo)}</textarea></div></div>
+      <div class="field-card field-tip"><div class="field-card-header"><span class="field-icon">💡</span> TIPS — Instructor Notes</div><div class="field-card-body"><textarea class="field-textarea" rows="3" data-step="${i}" data-field="tips">${esc(step.tips)}</textarea></div></div>
+    </div></div>`;
+    c.appendChild(card);
+  });
+  c.querySelectorAll('textarea,.step-title-input').forEach(el=>{el.addEventListener('input',e=>{state.iltSteps[parseInt(e.target.dataset.step)][e.target.dataset.field]=e.target.value;});});
+}
+
+function scrollToStep(i){document.querySelectorAll('.outline-step').forEach(s=>s.classList.remove('active-outline'));document.getElementById('ol-'+i).classList.add('active-outline');const card=document.getElementById('sc-'+i);card.scrollIntoView({behavior:'smooth',block:'start'});card.classList.add('highlight');setTimeout(()=>card.classList.remove('highlight'),2000);vp.currentTime=state.iltSteps[i].startTime;}
+function openLB(src){document.getElementById('lightboxImg').src=src;document.getElementById('lightbox').classList.add('show');}
+function dlSS(si,ssi){const ss=state.iltSteps[si].screenshots[ssi];const a=document.createElement('a');a.href=ss.dataUrl;a.download=`step${si+1}_ss${ssi+1}.jpg`;a.click();}
+async function reSS(si,ssi){try{const d=await captureAt(state.iltSteps[si].screenshots[ssi].time);state.iltSteps[si].screenshots[ssi].dataUrl=d;document.querySelectorAll('.step-card')[si].querySelectorAll('.screenshot-item img')[ssi].src=d;}catch(e){}}
+
+/* =============================================================
+   PPTX EXPORT — Original images, no cropping
+   ============================================================= */
+async function exportPPTX(){
+  if(!state.iltSteps.length){alert('Generate first.');return;}
+  setStatus('working','Building PowerPoint…');await delay(50);
+
+  const pptx=new PptxGenJS();
+  pptx.layout='LAYOUT_WIDE';
+  pptx.author='ILT Generator';
+  pptx.title='ILT Training Script';
+
+  // Master
+  pptx.defineSlideMaster({title:'ILT',background:{color:'FFFFFF'},objects:[
+    {rect:{x:0,y:0,w:'100%',h:0.7,fill:{color:'2563EB'}}},
+    {text:{text:'Instructor-Led Training',options:{x:0.4,y:0.12,w:5,h:0.45,fontSize:10,color:'FFFFFF',fontFace:'Segoe UI',bold:false}}}
+  ]});
+
+  // Title slide
+  const ts=pptx.addSlide();
+  ts.background={fill:'1E293B'};
+  ts.addText('Instructor-Led Training',{x:0.8,y:1.5,w:11.5,h:1.2,fontSize:36,fontFace:'Segoe UI',color:'FFFFFF',bold:true});
+  ts.addText(state.videoFile?state.videoFile.name:'',{x:0.8,y:2.8,w:11.5,h:0.5,fontSize:18,fontFace:'Segoe UI',color:'94A3B8'});
+  ts.addText(`${state.iltSteps.length} Steps | ${new Date().toLocaleDateString()}`,{x:0.8,y:3.4,w:11.5,h:0.5,fontSize:14,fontFace:'Segoe UI',color:'64748B'});
+
+  // TOC slide
+  const toc=pptx.addSlide({masterName:'ILT'});
+  toc.addText('Agenda',{x:0.4,y:0.08,w:5,h:0.55,fontSize:20,fontFace:'Segoe UI',color:'FFFFFF',bold:true});
+  const rows=[[
+    {text:'#',options:{bold:true,color:'FFFFFF',fill:{color:'2563EB'},fontSize:9}},
+    {text:'Step',options:{bold:true,color:'FFFFFF',fill:{color:'2563EB'},fontSize:9}},
+    {text:'Time',options:{bold:true,color:'FFFFFF',fill:{color:'2563EB'},fontSize:9}},
+    {text:'Duration',options:{bold:true,color:'FFFFFF',fill:{color:'2563EB'},fontSize:9}}
+  ]];
+  state.iltSteps.forEach(s=>rows.push([
+    {text:String(s.index),options:{fontSize:8}},
+    {text:s.title,options:{fontSize:8}},
+    {text:`${s.startStr}→${s.endStr}`,options:{fontSize:7,color:'64748B'}},
+    {text:`${(s.endTime-s.startTime).toFixed(1)}s`,options:{fontSize:8}}
+  ]));
+  toc.addTable(rows,{x:0.4,y:0.9,w:12.5,border:{type:'solid',pt:0.5,color:'E2E8F0'},colW:[0.4,8,3,1.1],rowH:0.32,autoPage:true});
+
+  // Step slides
+  const vidW=vp.videoWidth, vidH=vp.videoHeight;
+  const aspectRatio=vidW/vidH;
+
+  for(const step of state.iltSteps){
+    const slide=pptx.addSlide({masterName:'ILT'});
+
+    // Title
+    slide.addText(`Step ${step.index}: ${step.title}`,{x:0.4,y:0.08,w:12,h:0.55,fontSize:17,fontFace:'Segoe UI',color:'FFFFFF',bold:true,valign:'middle'});
+    slide.addText(`${step.startStr} → ${step.endStr}  (${(step.endTime-step.startTime).toFixed(1)}s)`,{x:0.4,y:0.78,w:12,h:0.25,fontSize:8,fontFace:'Courier New',color:'94A3B8'});
+
+    // Arrange screenshots — maintain original aspect, NO rounding/cropping
+    const ssCount=step.screenshots.length;
+    if(ssCount>0){
+      let cols,maxImgW,maxImgH,startX=0.4,startY=1.15,gapX=0.2,gapY=0.18;
+      const availW=12.5, availH=6.0;
+
+      if(ssCount===1){cols=1;}
+      else if(ssCount===2){cols=2;}
+      else if(ssCount<=4){cols=2;}
+      else if(ssCount<=6){cols=3;}
+      else{cols=4;}
+
+      const rowCount=Math.ceil(ssCount/cols);
+      maxImgW=(availW-(cols-1)*gapX)/cols;
+      maxImgH=(availH-(rowCount-1)*gapY)/rowCount - 0.25; // room for caption
+
+      // Fit to aspect ratio
+      let imgW,imgH;
+      if(maxImgW/maxImgH > aspectRatio){
+        imgH=maxImgH; imgW=imgH*aspectRatio;
+      } else {
+        imgW=maxImgW; imgH=imgW/aspectRatio;
+      }
+
+      // Center the grid
+      const totalGridW=cols*imgW+(cols-1)*gapX;
+      startX=(13.33-totalGridW)/2;
+
+      step.screenshots.forEach((ss,si)=>{
+        const col=si%cols, row=Math.floor(si/cols);
+        const x=startX+col*(imgW+gapX);
+        const y=startY+row*(imgH+gapY+0.2);
+        const b64=ss.dataUrl.split(',')[1];
+
+        try{
+          slide.addImage({
+            data:'image/jpeg;base64,'+b64,
+            x:x, y:y, w:imgW, h:imgH
+            // No rounding — original rectangular images
+          });
+        }catch(e){}
+
+        slide.addText(ss.timeStr,{x:x,y:y+imgH+0.02,w:imgW,h:0.18,fontSize:6,fontFace:'Courier New',color:'BBBBBB',align:'center'});
+      });
+    }
+
+    // Speaker notes — full facilitator guide
+    const notes=[
+      `STEP ${step.index}: ${step.title}`,
+      `Time: ${step.startStr} → ${step.endStr} (${(step.endTime-step.startTime).toFixed(1)}s)`,
+      `${'═'.repeat(50)}`,
+      ``,
+      `🗣 TO SAY (Facilitator Script)`,
+      `${'─'.repeat(40)}`,
+      step.toSay,
+      ``,
+      `👆 TO DO (On-Screen Actions)`,
+      `${'─'.repeat(40)}`,
+      step.toDo,
+      ``,
+      `💡 TIPS (Instructor Notes)`,
+      `${'─'.repeat(40)}`,
+      step.tips
+    ].join('\n');
+
+    slide.addNotes(notes);
+  }
+
+  // End slide
+  const es=pptx.addSlide();
+  es.background={fill:'1E293B'};
+  es.addText('End of Training',{x:0.8,y:2.5,w:11.5,h:1,fontSize:36,fontFace:'Segoe UI',color:'FFFFFF',bold:true,align:'center'});
+  es.addText('Questions & Discussion',{x:0.8,y:3.6,w:11.5,h:0.5,fontSize:18,fontFace:'Segoe UI',color:'94A3B8',align:'center'});
+
+  try{await pptx.writeFile({fileName:'ILT_Training.pptx'});setStatus('done','PPTX downloaded!');}
+  catch(e){setStatus('error','PPTX failed: '+e.message);console.error(e);}
+}
+
+/* ===== HTML EXPORTS ===== */
+function exportILT(){
+  if(!state.iltSteps.length){alert('Generate first.');return;}
+  let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ILT Script</title><style>body{font-family:'Segoe UI',sans-serif;max-width:960px;margin:0 auto;padding:40px 24px;color:#1e293b;line-height:1.6}h1{color:#2563eb;border-bottom:3px solid #2563eb;padding-bottom:12px}.toc{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:24px 0}.toc h2{font-size:1rem;margin-bottom:12px}.toc-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #e2e8f0;font-size:.9rem}.toc-time{color:#64748b;font-family:monospace;font-size:.8rem}.step{page-break-inside:avoid;margin-bottom:32px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}.step-hdr{background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;padding:16px 20px}.step-hdr h2{margin:0;font-size:1.1rem}.step-hdr p{margin:4px 0 0;opacity:.8;font-size:.8rem}.step-bdy{padding:20px}.ss-row{display:flex;gap:10px;overflow-x:auto;margin-bottom:16px}.ss-row img{height:140px;border-radius:6px;border:1px solid #e2e8f0;flex-shrink:0}.field{margin-bottom:16px}.field h3{font-size:.85rem;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}.field-say h3{color:#7c3aed}.field-do h3{color:#2563eb}.field-tip h3{color:#f59e0b}.field p{margin:0;white-space:pre-line;font-size:.9rem;padding:10px 14px;border-radius:6px}.field-say p{background:#f5f3ff;border-left:3px solid #7c3aed}.field-do p{background:#eff6ff;border-left:3px solid #2563eb}.field-tip p{background:#fffbeb;border-left:3px solid #f59e0b}@media print{.step{break-inside:avoid}}</style></head><body><h1>ILT Training Script</h1><p>Generated: ${new Date().toLocaleString()} | Video: ${state.videoFile?state.videoFile.name:''}</p><div class="toc"><h2>Contents</h2>${state.iltSteps.map(s=>`<div class="toc-item"><span>Step ${s.index}: ${esc(s.title)}</span><span class="toc-time">${s.startStr}→${s.endStr}</span></div>`).join('')}</div>`;
+  state.iltSteps.forEach(step=>{const ssImgs=step.screenshots.map(ss=>`<img src="${ss.dataUrl}">`).join('');html+=`<div class="step"><div class="step-hdr"><h2>Step ${step.index}: ${esc(step.title)}</h2><p>${step.startStr}→${step.endStr} (${(step.endTime-step.startTime).toFixed(1)}s)</p></div><div class="step-bdy">${ssImgs?`<div class="ss-row">${ssImgs}</div>`:''}<div class="field field-say"><h3>🗣 To Say</h3><p>${esc(step.toSay)}</p></div><div class="field field-do"><h3>👆 To Do</h3><p>${esc(step.toDo)}</p></div><div class="field field-tip"><h3>💡 Tips</h3><p>${esc(step.tips)}</p></div></div></div>`;});
+  html+='</body></html>';
+  const blob=new Blob([html],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ILT_Script.html';a.click();URL.revokeObjectURL(a.href);setStatus('done','Exported');
+}
+function exportILTJSON(){if(!state.iltSteps.length){alert('Generate first.');return;}const data=state.iltSteps.map(s=>({step:s.index,title:s.title,startTime:s.startStr,endTime:s.endStr,duration:+(s.endTime-s.startTime).toFixed(2),toSay:s.toSay,toDo:s.toDo,tips:s.tips,subtitleCount:s.subtitles.length,screenshotCount:s.screenshots.length,visualActionsDetected:s.visualActions?.length||0,originalText:s.originalText}));const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ILT_Script.json';a.click();URL.revokeObjectURL(a.href);setStatus('done','JSON exported');}
+function exportSubsJSON(){const data=state.subtitles.map(s=>({index:s.index,start:s.startStr,end:s.endStr,duration:+(s.end-s.start).toFixed(3),text:s.text}));const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='subtitles.json';a.click();URL.revokeObjectURL(a.href);}
+function exportSlideDeck(){
+  if(!state.iltSteps.length){alert('Generate first.');return;}
+  let html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ILT Slides</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0f172a;color:#fff;overflow:hidden}.slide{width:100vw;height:100vh;display:none;padding:40px 56px;flex-direction:column}.slide.active{display:flex}.slide-title{font-size:1.8rem;margin-bottom:6px;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}.slide-time{font-size:.75rem;opacity:.5;margin-bottom:20px;font-family:monospace}.slide-main{display:flex;gap:32px;flex:1;overflow:hidden}.slide-left{flex:1;overflow-y:auto}.slide-right{width:340px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}.slide-right img{width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4)}.sec{margin-bottom:20px}.sec h3{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;opacity:.6;margin-bottom:8px}.sec-say h3{color:#a78bfa}.sec-do h3{color:#60a5fa}.sec-tip h3{color:#fbbf24}.sec p{font-size:1rem;line-height:1.7;white-space:pre-line}.nav{position:fixed;bottom:20px;right:20px;display:flex;gap:8px;z-index:10}.nav button{padding:10px 20px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:#fff;border-radius:8px;cursor:pointer;backdrop-filter:blur(10px)}.nav button:hover{background:rgba(255,255,255,.15)}.sn{position:fixed;bottom:20px;left:20px;font-size:.75rem;opacity:.4}</style></head><body>`;
+  state.iltSteps.forEach((step,i)=>{const ssImgs=step.screenshots.map(ss=>`<img src="${ss.dataUrl}">`).join('');html+=`<div class="slide ${i===0?'active':''}" id="s${i}"><div class="slide-title">Step ${step.index}: ${esc(step.title)}</div><div class="slide-time">${step.startStr}→${step.endStr}</div><div class="slide-main"><div class="slide-left"><div class="sec sec-say"><h3>🗣 To Say</h3><p>${esc(step.toSay)}</p></div><div class="sec sec-do"><h3>👆 To Do</h3><p>${esc(step.toDo)}</p></div><div class="sec sec-tip"><h3>💡 Tips</h3><p>${esc(step.tips)}</p></div></div><div class="slide-right">${ssImgs}</div></div></div>`;});
+  html+=`<div class="nav"><button onclick="prev()">◀</button><button onclick="next()">▶</button></div><div class="sn" id="sn">1/${state.iltSteps.length}</div><script>let c=0;const t=${state.iltSteps.length};function sh(n){document.querySelectorAll('.slide').forEach(s=>s.classList.remove('active'));document.getElementById('s'+n).classList.add('active');document.getElementById('sn').textContent=(n+1)+'/'+t;}function next(){if(c<t-1){c++;sh(c);}}function prev(){if(c>0){c--;sh(c);}}document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' ')next();if(e.key==='ArrowLeft')prev();});<\/script></body></html>`;
+  const blob=new Blob([html],{type:'text/html'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ILT_Slides.html';a.click();URL.revokeObjectURL(a.href);setStatus('done','Exported');
+}
+
+/* ===== UTILS ===== */
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();document.getElementById('lightbox').classList.remove('show');}});
+function setStatus(type,msg){document.getElementById('statusDot').className='status-dot '+type;document.getElementById('statusText').textContent=msg;}
+['videoUploadCard','srtUploadCard'].forEach(id=>{const card=document.getElementById(id);card.addEventListener('dragover',e=>{e.preventDefault();card.classList.add('dragover');});card.addEventListener('dragleave',()=>card.classList.remove('dragover'));card.addEventListener('drop',e=>{e.preventDefault();card.classList.remove('dragover');const input=card.querySelector('input[type=file]');if(e.dataTransfer.files.length){input.files=e.dataTransfer.files;input.dispatchEvent(new Event('change'));}});});
+</script>
+</body>
+</html>
